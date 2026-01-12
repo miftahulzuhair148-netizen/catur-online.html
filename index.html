@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Catur Online</title>
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+
+    h1 { margin-top: 20px; }
+
+    input, button {
+      padding: 10px;
+      margin: 5px;
+      border-radius: 6px;
+      border: none;
+    }
+
+    button {
+      background: #2ecc71;
+      color: #000;
+      font-weight: bold;
+    }
+
+    #login, #game {
+      max-width: 400px;
+      margin: auto;
+      margin-top: 40px;
+    }
+
+    #game { display: none; }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 2px;
+      margin-top: 20px;
+    }
+
+    .cell {
+      width: 45px;
+      height: 45px;
+      font-size: 24px;
+      line-height: 45px;
+      background: #333;
+    }
+
+    #chat {
+      margin-top: 20px;
+      text-align: left;
+    }
+
+    #messages {
+      height: 120px;
+      overflow-y: auto;
+      background: #111;
+      padding: 5px;
+      margin-bottom: 5px;
+      font-size: 14px;
+    }
+
+    .error {
+      color: red;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>Catur Online</h1>
+
+<!-- LOGIN -->
+<div id="login">
+  <input id="nameInput" placeholder="Nama">
+  <input id="email" placeholder="Email">
+  <input id="password" type="password" placeholder="Password">
+  <br>
+  <button id="loginBtn">Masuk / Daftar</button>
+  <div id="loginError" class="error"></div>
+</div>
+
+<!-- GAME -->
+<div id="game">
+  <div id="profileBox"></div>
+  <div id="status">Menunggu lawan...</div>
+  <div id="board"></div>
+
+  <div id="chat">
+    <div id="messages"></div>
+    <input id="chatInput" placeholder="Chat penonton / pemain">
+    <button id="sendChat">Kirim</button>
+  </div>
+
+  <button id="logoutBtn">Logout</button>
+</div>
+
+<script>
+/* ================== FIREBASE CONFIG ================== */
+const firebaseConfig = {
+  apiKey: "AIzaSyDkc6U4iRgPCaBA8ckQdn6YX0dh5-uNpTg",
+  authDomain: "catur-online-77231.firebaseapp.com",
+  databaseURL: "https://catur-online-77231-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "catur-online-77231",
+  storageBucket: "catur-online-77231.firebasestorage.app",
+  messagingSenderId: "818334923522",
+  appId: "1:818334923522:web:b63297ef12e6b879c9201b"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.database();
+
+/* ================== DOM ELEMENTS (FIX ERROR) ================== */
+const login = document.getElementById("login");
+const game = document.getElementById("game");
+const boardEl = document.getElementById("board");
+const statusEl = document.getElementById("status");
+const messages = document.getElementById("messages");
+const chatInput = document.getElementById("chatInput");
+const profileBox = document.getElementById("profileBox");
+const loginError = document.getElementById("loginError");
+
+/* ================== LOGIN ================== */
+document.getElementById("loginBtn").onclick = async () => {
+  const email = document.getElementById("email").value;
+  const pass = document.getElementById("password").value;
+  const name = document.getElementById("nameInput").value;
+
+  if (!email || !pass || !name) {
+    loginError.textContent = "Lengkapi semua field";
+    return;
+  }
+
+  try {
+    const res = await auth.signInWithEmailAndPassword(email, pass);
+    afterLogin(res.user, name);
+  } catch {
+    const res = await auth.createUserWithEmailAndPassword(email, pass);
+    afterLogin(res.user, name);
+  }
+};
+
+function afterLogin(user, name) {
+  db.ref("users/" + user.uid).set({ name });
+  login.style.display = "none";
+  game.style.display = "block";
+  profileBox.textContent = "Login sebagai: " + name;
+  initBoard();
+}
+
+/* ================== BOARD ================== */
+const pieces =
+["♜","♞","♝","♛","♚","♝","♞","♜",
+ "♟","♟","♟","♟","♟","♟","♟","♟",
+ "","","","","","","","",
+ "","","","","","","","",
+ "","","","","","","","",
+ "","","","","","","","",
+ "♙","♙","♙","♙","♙","♙","♙","♙",
+ "♖","♘","♗","♕","♔","♗","♘","♖"];
+
+function initBoard() {
+  boardEl.innerHTML = "";
+  pieces.forEach(p => {
+    const d = document.createElement("div");
+    d.className = "cell";
+    d.textContent = p;
+    boardEl.appendChild(d);
+  });
+}
+
+/* ================== CHAT ================== */
+document.getElementById("sendChat").onclick = () => {
+  if (!chatInput.value) return;
+  db.ref("chat").push(chatInput.value);
+  chatInput.value = "";
+};
+
+db.ref("chat").limitToLast(50).on("child_added", snap => {
+  const div = document.createElement("div");
+  div.textContent = snap.val();
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
+});
+
+/* ================== LOGOUT ================== */
+document.getElementById("logoutBtn").onclick = () => {
+  auth.signOut();
+  location.reload();
+};
+</script>
+
+</body>
+</html>
